@@ -98,5 +98,113 @@ Eigen::Vector2d Utils::rotateVec(Eigen::Vector2d vector, double angle) {
     R(0,1) = -s;
     R(1,0) = s;
 
-    return R * vector; //TODO: Is this actuall Vector2d?
+    return R * vector; 
+}
+
+amp::Polygon Utils::CSObstConvPolyTranslate(amp::Polygon& obstacle, amp::Polygon& robot) {
+    // Init variables
+    int oInd = 0, rInd = 0;
+    std::vector<Eigen::Vector2d> oVertices = obstacle.verticesCCW();
+    int n = oVertices.size();
+    std::vector<Eigen::Vector2d> rVertices = negateRotateReorder(robot.verticesCCW(), 0.0);
+    int m = rVertices.size();
+
+    std::vector<Eigen::Vector2d> csObstacle;
+
+    // Start looping and building up the vertices for the C-Space Obstacle
+    while (csObstacle.size() <= (n+m)) {
+        // Handle wrapping
+        int oindLow = oInd;
+        int oindHi = oInd + 1;
+        if (oInd == (n-1)) {
+            oindHi = 0;
+        } else if (oInd == n) {
+            oindHi = 1;
+            oindLow = 0;
+        }
+        double oAngle = Utils::angleOfSegment(oVertices[oindHi] - oVertices[oindLow]);
+        oAngle = (oInd == n) ? oAngle + 2 * M_PI : oAngle;
+        //PRINT_VEC2("first "<< oindLow,oVertices[oindLow]);
+        //PRINT_VEC2("second " << oindHi,oVertices[oindHi]);
+
+        int rindLow = rInd;
+        int rindHi = rInd + 1;
+        if (rInd == (m-1)) {
+            rindHi = 0;
+        } else if (rInd == m) {
+            rindHi = 1;
+            rindLow = 0;
+        }
+        double rAngle = Utils::angleOfSegment(rVertices[rindHi] - rVertices[rindLow]);
+        rAngle = (rInd == m) ? rAngle + 2 * M_PI : rAngle;
+        //PRINT_VEC2("first "<<rindLow,rVertices[rindLow]);
+        //PRINT_VEC2("second " << rindHi,rVertices[rindHi]);
+
+        //DEBUG("Angles are " << oAngle << " and " << rAngle);
+
+        // Push to c-space vertices
+        csObstacle.push_back(oVertices[oindLow] + rVertices[rindLow]);
+
+        //check for lower angle, increment corresponding index
+        if (std::abs(rAngle - oAngle) < .000001) {
+            oInd++;
+            rInd++;
+        } else if (oAngle < rAngle) {
+            oInd++;
+        } else {
+            rInd++;
+        }
+        if (oInd == n && rInd == m) {
+            break;
+        }
+    }
+
+    amp::Polygon csPolygon(csObstacle);
+
+    return csPolygon;
+}
+
+double Utils::angleOfSegment(Eigen::Vector2d segment) {
+    double angle = atan2(segment(1), segment(0));
+    angle = (angle < 0) ? angle + 2 * M_PI : angle;
+    return angle;
+}
+
+std::vector<Eigen::Vector2d> Utils::negateRotateReorder(std::vector<Eigen::Vector2d> vertices, double angle) {
+    //First pass, negate and rotate each vertex
+    const int n = vertices.size();
+
+    for (int i = 0; i < n; i++) {
+        vertices[i] = -Utils::rotateVec(vertices[i], angle);
+        PRINT_VEC2("Rotated, negated ", vertices[i]);
+    }
+
+    //Second pass, find lowest y-value
+    
+    int ind = n + 1;
+    double hi = 999999999999999;
+    Eigen::Vector2d offset;
+
+    for (int i = 0; i < n; i++) {
+        // Also check for left-most if multiple vertices at same y-value
+        if (vertices[i](1) < hi || 
+                (vertices[i](1) == hi && vertices[i](0) < vertices[ind](0))) {
+            hi = vertices[i](1);
+            ind = i;
+            offset = vertices[i];
+        }
+    }
+
+    //Construct new, re-ordered vertices
+    std::vector<Eigen::Vector2d> newVertices;
+    while (newVertices.size() < n) {
+        //newVertices.push_back(vertices[ind] - offset);
+        newVertices.push_back(vertices[ind]);
+        PRINT_VEC2("New robot ", newVertices.back());
+        ind++;
+        if (ind == n) {
+            ind = 0;
+        }
+    }
+    return newVertices;
 }
