@@ -7,7 +7,7 @@
 #include <math.h>
 
 namespace Utils {
-    bool checkStep(Eigen::Vector2d start, Eigen::Vector2d stop, const amp::Problem2D& problem);
+    bool checkStep(Eigen::Vector2d start, Eigen::Vector2d stop, const amp::Environment2D& env);
 
     bool checkLineSegmentIntersect(Eigen::Vector2d start, Eigen::Vector2d stop,
         Eigen::Vector2d obsStart, Eigen::Vector2d obsStop);
@@ -18,7 +18,7 @@ namespace Utils {
     Eigen::Vector2d rotateVec(Eigen::Vector2d vector, double angle);
 
     //Turn convex polygon obstacle and robot into a C-space obstacle, translate only robot case
-    amp::Polygon CSObstConvPolyTranslate(amp::Polygon& obstacle, amp::Polygon& robot);
+    amp::Polygon CSObstConvPolySingle(amp::Polygon& obstacle, amp::Polygon& robot, double angle);
 
     //Turn convex polygon obstacle and robot into a C-space obstacle, robot can rotate
     std::vector<amp::Polygon> CSObstConvPolyRotate(amp::Polygon obstacle, amp::Polygon robot, std::vector<double> rotAngles);

@@ -1,12 +1,12 @@
 #include "Utils.h"
 
 // Return true if the possible step intersects an obstacle
-bool Utils::checkStep(Eigen::Vector2d start, Eigen::Vector2d stop, const amp::Problem2D& problem) {
+bool Utils::checkStep(Eigen::Vector2d start, Eigen::Vector2d stop, const amp::Environment2D& env) {
     // Iterate through each obstacle, then each line segment, to check if the bug
     // motion from `start` to `stop` intersects those segments
 
     // Get all Obstacles
-    for(amp::Obstacle2D obst : problem.obstacles){
+    for(amp::Obstacle2D obst : env.obstacles){
         //Get all vertices
         std::vector<Eigen::Vector2d>& vertices = obst.verticesCCW();
 
@@ -101,12 +101,12 @@ Eigen::Vector2d Utils::rotateVec(Eigen::Vector2d vector, double angle) {
     return R * vector; 
 }
 
-amp::Polygon Utils::CSObstConvPolyTranslate(amp::Polygon& obstacle, amp::Polygon& robot) {
+amp::Polygon Utils::CSObstConvPolySingle(amp::Polygon& obstacle, amp::Polygon& robot, double angle) {
     // Init variables
     int oInd = 0, rInd = 0;
     std::vector<Eigen::Vector2d> oVertices = obstacle.verticesCCW();
     int n = oVertices.size();
-    std::vector<Eigen::Vector2d> rVertices = negateRotateReorder(robot.verticesCCW(), 0.0);
+    std::vector<Eigen::Vector2d> rVertices = negateRotateReorder(robot.verticesCCW(), angle);
     int m = rVertices.size();
 
     std::vector<Eigen::Vector2d> csObstacle;
@@ -176,7 +176,7 @@ std::vector<Eigen::Vector2d> Utils::negateRotateReorder(std::vector<Eigen::Vecto
 
     for (int i = 0; i < n; i++) {
         vertices[i] = -Utils::rotateVec(vertices[i], angle);
-        PRINT_VEC2("Rotated, negated ", vertices[i]);
+        //PRINT_VEC2("Rotated, negated ", vertices[i]);
     }
 
     //Second pass, find lowest y-value
@@ -200,11 +200,20 @@ std::vector<Eigen::Vector2d> Utils::negateRotateReorder(std::vector<Eigen::Vecto
     while (newVertices.size() < n) {
         //newVertices.push_back(vertices[ind] - offset);
         newVertices.push_back(vertices[ind]);
-        PRINT_VEC2("New robot ", newVertices.back());
+        //PRINT_VEC2("New robot ", newVertices.back());
         ind++;
         if (ind == n) {
             ind = 0;
         }
     }
     return newVertices;
+}
+
+std::vector<amp::Polygon> Utils::CSObstConvPolyRotate(amp::Polygon obstacle, amp::Polygon robot, std::vector<double> rotAngles) {
+    std::vector<amp::Polygon> cSpaceObstacle;
+
+    for (double angle : rotAngles) {
+        cSpaceObstacle.push_back(CSObstConvPolySingle(obstacle, robot, angle * 180.0 / M_PI));
+    }
+    return cSpaceObstacle;
 }
