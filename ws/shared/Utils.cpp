@@ -217,3 +217,31 @@ std::vector<amp::Polygon> Utils::CSObstConvPolyRotate(amp::Polygon obstacle, amp
     }
     return cSpaceObstacle;
 }
+
+Eigen::Vector2d Utils::pointLineSegmentClosest(Eigen::Vector2d point, std::vector<Eigen::Vector2d> lineSegment) {
+    /* 
+    With points on line segment A and B, and separate point C, to find the
+    closest point on AB to C: first project vector AC onto vector AB. If that
+    projection falls between and and B, the closest point is the projection. 
+    If it falls beyond A, A is the closest point. If it falls beyond B, B 
+    is the closest point.
+    */
+    
+    Eigen::Vector2d AB = lineSegment[1] - lineSegment[0];
+    Eigen::Vector2d AC = point - lineSegment[0];
+
+    double dotProduct = AB.dot(AC);
+    double norm2 = AB.dot(AB);
+
+    double projLength = dotProduct / norm2;
+
+    //Short circuit if beyond the line segment
+    if (projLength > 1) {
+        return lineSegment[1];
+    } else if (projLength < 0) {
+        return lineSegment[0];
+    }
+
+    Eigen::Vector2d closestPoint = lineSegment[0] + projLength * AB;
+    return closestPoint;
+}

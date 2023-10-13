@@ -27,4 +27,5 @@ namespace Utils {
 
     std::vector<Eigen::Vector2d> negateRotateReorder(std::vector<Eigen::Vector2d> vertices, double angle);
 
+    Eigen::Vector2d pointLineSegmentClosest(Eigen::Vector2d point, std::vector<Eigen::Vector2d> lineSegment);
 }
