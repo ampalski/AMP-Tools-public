@@ -31,16 +31,28 @@ int main(int argc, char** argv) {
     */
 
     //Problem 2b1:
-    
+    /*
     Problem2D problem = HW2::getWorkspace1();
     amp::Path2D path = algo.plan(problem);
     bool success = HW5::check(path, problem, true);
-    LOG("Found valid solution to Problem2a: " << (success ? "Yes!" : "No :("));
+    LOG("Found valid solution to Problem2b1: " << (success ? "Yes!" : "No :("));
     LOG("Path length: " << path.length());
     Visualizer::makeFigure(problem, path);
-    
+    */
+
+    //Problem 2b2
+    /*
+    Problem2D problem = HW2::getWorkspace2();
+    amp::Path2D path = algo.plan(problem);
+    bool success = HW5::check(path, problem, true);
+    LOG("Found valid solution to Problem2b2: " << (success ? "Yes!" : "No :("));
+    LOG("Path length: " << path.length());
+    Visualizer::makeFigure(problem, path);
+    */
 
     Visualizer::showFigures();
+
+    HW5::grade(algo, "anpa7940@colorado.edu", argc, argv);
 
     return 0;
 }

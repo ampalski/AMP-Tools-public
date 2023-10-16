@@ -6,7 +6,7 @@ GradientDescentBug::GradientDescentBug() {
     m_dStar = 1.0;
     m_attGain = 1.0;
     m_repGain = 1.0;
-    m_wavGain = 5.0;
+    m_wavGain = 1.0;
 }
 
 GradientDescentBug::GradientDescentBug(double dStar, double qStar, double attGain, double repGain) {
@@ -14,7 +14,7 @@ GradientDescentBug::GradientDescentBug(double dStar, double qStar, double attGai
     m_dStar = dStar;
     m_attGain = attGain;
     m_repGain = repGain;
-    m_wavGain = 5.0;
+    m_wavGain = 1.0;
 }
 
 amp::Path2D GradientDescentBug::plan(const amp::Problem2D& problem) {
@@ -30,25 +30,30 @@ amp::Path2D GradientDescentBug::plan(const amp::Problem2D& problem) {
     int ktr = 0;
 
     while (dist > epsilon) {
-        DEBUG("Running Step" << path.waypoints.size());
-        path.waypoints.push_back(step(path.waypoints.back(), problem));
+        //DEBUG("Running Step" << path.waypoints.size());
+        path.waypoints.push_back(step(path.waypoints, problem));
         
-        PRINT_VEC2("Adding point: ", path.waypoints.back());
+        //PRINT_VEC2("Adding point: ", path.waypoints.back());
 
         // Find when progress gets stalled
         dist = (path.waypoints.back() - problem.q_goal).norm();
         if (!useWavefront && dist < minDistToGo) {
             minDistToGo = dist;
             ktr = 0;
-            DEBUG("MinDist reset " << dist);
+            //DEBUG("MinDist reset " << dist);
         } else {
             ktr++;
         }
 
         // Calculate wavefront if progress is stalled
         if (!useWavefront && ktr > 20) {
-            DEBUG("Adding Wavefront");
+            //DEBUG("Adding Wavefront");
             useWavefront = true;
+            double xRange = problem.x_max - problem.x_min;
+            double yRange = problem.y_max - problem.y_min;
+            double xStep = xRange / (xCells - 1);
+            double yStep = yRange / (yCells - 1);
+            m_qStar = 0.25*std::min(xStep,yStep);
             calcWavefront(problem);
         }
 
@@ -63,23 +68,29 @@ amp::Path2D GradientDescentBug::plan(const amp::Problem2D& problem) {
     return path;
 }
 
-Eigen::Vector2d GradientDescentBug::step(Eigen::Vector2d curPos, const amp::Problem2D& problem) {
+Eigen::Vector2d GradientDescentBug::step(std::vector<Eigen::Vector2d> path, const amp::Problem2D& problem) {
     Eigen::Vector2d gradU(0.0, 0.0);
     // Build up attractor 
     // Check for current distance to goal versus dStar
     // Build appropriate grad(U) terms based on dStar
     // If wavefront is needed, call the function to get the term and add it
-
+    Eigen::Vector2d curPos = path.back();
     Eigen::Vector2d diff = curPos - problem.q_goal;
     double dist = diff.norm();
-    if (dist > m_dStar) {
-        gradU += (m_dStar / dist * m_attGain * diff);
-    } else {
-        gradU += m_attGain * diff;
-    }
 
     if (useWavefront) {
-        gradU += m_wavGain * wavefrontGradient(curPos, problem);
+        double xRange = problem.x_max - problem.x_min;
+        double yRange = problem.y_max - problem.y_min;
+        double xStep = xRange / (xCells - 1);
+        double yStep = yRange / (yCells - 1);
+        gradU += m_wavGain * std::min(xStep, yStep) * wavefrontGradient(path, problem);
+        //gradU += m_wavGain * wavefrontGradient(path, problem);
+    } else {
+        if (dist > m_dStar) {
+            gradU += (m_dStar / dist * m_attGain * diff);
+        } else {
+            gradU += m_attGain * diff;
+        }
     }
     
     // Build up repulsor 
@@ -118,6 +129,10 @@ Eigen::Vector2d GradientDescentBug::step(Eigen::Vector2d curPos, const amp::Prob
     // If no collision, test if step size is greater than distance to goal
     // reduce step size to goal if that's the case
 
+    if (gradU(0) == 0.0 && gradU(1) == 0.0) {
+        gradU(0) = amp::RNG::randd(-1.0, 1.0);
+        gradU(1) = amp::RNG::randd(-1.0, 1.0);
+    }
     double alpha = 1.0;
     Eigen::Vector2d newPos;
 
@@ -158,7 +173,8 @@ void GradientDescentBug::calcWavefront(const amp::Problem2D& problem) {
     xind = std::clamp(xind, 0, xCells);
     yind = std::clamp(yind, 0, yCells);
 
-    DEBUG("qGoal is at ("<<xind<<", "<<yind<<")");
+    //DEBUG("qGoal is at ("<<xind<<", "<<yind<<") = "
+        //<< problem.x_min+xind*xStep << ", " << problem.y_min+yind*yStep<<")");
 
     // Initialize wavefront
     wavefront(xind, yind) = 2;
@@ -173,7 +189,8 @@ void GradientDescentBug::calcWavefront(const amp::Problem2D& problem) {
     std::vector<std::pair<int, int>> zeroNeighbors;
     std::vector<std::pair<int, int>> prevNeighbors;
     std::vector<std::pair<int, int>> tempNeighbors;
-    Eigen::Vector2d start, stop;
+    Eigen::Vector2d start = Eigen::Vector2d::Zero();
+    Eigen::Vector2d stop = Eigen::Vector2d::Zero();
 
     while (nextNeighbors.size() > 0) {
         std::pair<int,int> curInd = nextNeighbors.front();
@@ -182,7 +199,8 @@ void GradientDescentBug::calcWavefront(const amp::Problem2D& problem) {
             nextNeighbors.pop();
             continue;
         }
-        //DEBUG("Current ind is ("<<curInd.first<<", "<<curInd.second<<")");
+        //DEBUG("Current ind is ("<<curInd.first<<", "<<curInd.second<<") = ("
+            //<< problem.x_min+curInd.first*xStep << ", " << problem.y_min+curInd.second*yStep<<")");
 
         ktr++;
         if (ktr%100 == 0) {
@@ -221,7 +239,7 @@ void GradientDescentBug::calcWavefront(const amp::Problem2D& problem) {
         // Set new value
         lowestNeighbor = INT32_MAX;
         if (prevNeighbors.size() == 0) {
-            DEBUG("Accessed empty neighborhood by accident at " << ktr);
+            //DEBUG("Accessed empty neighborhood by accident at " << ktr);
         }
         for (std::pair<int,int> check : prevNeighbors) {
             val = wavefront(check.first,check.second);
@@ -234,18 +252,19 @@ void GradientDescentBug::calcWavefront(const amp::Problem2D& problem) {
         wavefront(curInd.first, curInd.second) = lowestNeighbor + 1;
 
         // Expand the wavefront
-        start(problem.x_min + curInd.first * xStep, 
-            problem.y_min + curInd.second * yStep);
+        start(0) = problem.x_min + curInd.first * xStep; 
+        start(1) = problem.y_min + curInd.second * yStep;
         for (std::pair<int,int> check : zeroNeighbors) {
-            stop(problem.x_min + check.first * xStep, 
-                problem.y_min + check.second * yStep);
+            //DEBUG("Adding ("<<check.first<<", "<<check.second<<")");
+
+            stop(0) = problem.x_min + check.first * xStep; 
+            stop(1) = problem.y_min + check.second * yStep;
 
             if (Utils::checkStep(start, stop, problem)) {
                 wavefront(check.first, check.second) = 1;
-                DEBUG("Obstacle found");
+                //DEBUG("Obstacle found");
                 continue;
             }
-            //DEBUG("Adding ("<<check.first<<", "<<check.second<<")");
             wavefront(check.first, check.second) = -1; // already accounted for
             nextNeighbors.push(check);
         }
@@ -255,8 +274,9 @@ void GradientDescentBug::calcWavefront(const amp::Problem2D& problem) {
 
 }
 
-Eigen::Vector2d GradientDescentBug::wavefrontGradient(Eigen::Vector2d curPos, const amp::Problem2D& problem) {
+Eigen::Vector2d GradientDescentBug::wavefrontGradient(std::vector<Eigen::Vector2d> path, const amp::Problem2D& problem) {
     // Find grid point of curPos
+    Eigen::Vector2d curPos = path.back();
     double xRange = problem.x_max - problem.x_min;
     double yRange = problem.y_max - problem.y_min;
     double xStep = xRange / (xCells - 1);
@@ -269,7 +289,15 @@ Eigen::Vector2d GradientDescentBug::wavefrontGradient(Eigen::Vector2d curPos, co
     yind = std::clamp(yind, 0, yCells-1);
 
     int curValue = wavefront(xind, yind);
-    DEBUG("("<<xind<<", "<<yind<<") = "<<curValue);
+    //Get neighbor values
+    int right = wavefront(std::clamp(xind + 1, 0, xCells-1), yind);
+    int left = wavefront(std::clamp(xind - 1, 0, xCells-1), yind);
+    int up = wavefront(xind, std::clamp(yind + 1, 0, yCells-1));
+    int down = wavefront(xind, std::clamp(yind - 1, 0, yCells-1));
+
+    //DEBUG("("<<xind<<", "<<yind<<") = "<<curValue);
+    //DEBUG("Neighbors are " << right << " " << left<<" "<<up<<" "<<down);
+
     // Handle off nominal
     if (curValue == 0 || curValue == 1) {
         return Eigen::Vector2d(0.0, 0.0);
@@ -277,24 +305,30 @@ Eigen::Vector2d GradientDescentBug::wavefrontGradient(Eigen::Vector2d curPos, co
 
     // Search adjacent grid points for lowest neighbor
     Eigen::Vector2d waveGrad;
-    int lowVal = wavefront(std::clamp(xind + 1, 0, xCells-1), yind);
+    int lowVal = right == 1 ? INT_MAX : right;
     waveGrad << -1, 0;
 
-    if (wavefront(std::clamp(xind - 1, 0, xCells-1), yind) < lowVal) {
-        lowVal = wavefront(std::clamp(xind - 1, 0, xCells-1), yind);
-        waveGrad(0) = 1.0;
-        waveGrad(1) = 0.0;
+    if (left != 1) {
+        if (left < lowVal || (left == lowVal && amp::RNG::randf()>0.5)) {
+            lowVal = left;
+            waveGrad(0) = 1.0;
+            waveGrad(1) = 0.0;
+        }
     }
-    if (wavefront(xind, std::clamp(yind + 1, 0, yCells-1)) < lowVal) {
-        lowVal = wavefront(xind, std::clamp(yind + 1, 0, yCells-1));
-        waveGrad(0) = 0.0;
-        waveGrad(1) = -1.0;
+    if (up != 1) {
+        if (up < lowVal || (up == lowVal && amp::RNG::randf()>0.5)) {
+            lowVal = up;
+            waveGrad(0) = 0.0;
+            waveGrad(1) = -1.0;
+        }
     }
-    if (wavefront(xind, std::clamp(yind - 1, 0, yCells-1)) < lowVal) {
-        lowVal = wavefront(xind, std::clamp(yind - 1, 0, yCells-1));
-        waveGrad(0) = 0.0;
-        waveGrad(1) = 1.0;
+    if (down != 1) {
+        if (down < lowVal || (down == lowVal && amp::RNG::randf()>0.5)) {
+            lowVal = down;
+            waveGrad(0) = 0.0;
+            waveGrad(1) = 1.0;
+        }
     }
-    PRINT_VEC2("Wavefront gradient is ", waveGrad);
+    //PRINT_VEC2("Wavefront gradient is ", waveGrad);
     return waveGrad;
 }
