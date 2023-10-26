@@ -15,6 +15,10 @@ namespace Utils {
     bool checkCollinearOverlap(double x1, double y1, double x2, double y2, 
         double x3, double y3);
 
+    bool isPointInObstacles(Eigen::Vector2d point, const amp::Environment2D& env);
+
+    bool isPointInPolygon(Eigen::Vector2d point, const amp::Obstacle2D& obst);
+
     Eigen::Vector2d rotateVec(Eigen::Vector2d vector, double angle);
 
     //Turn convex polygon obstacle and robot into a C-space obstacle, translate only robot case
@@ -28,4 +32,8 @@ namespace Utils {
     std::vector<Eigen::Vector2d> negateRotateReorder(std::vector<Eigen::Vector2d> vertices, double angle);
 
     Eigen::Vector2d pointLineSegmentClosest(Eigen::Vector2d point, std::vector<Eigen::Vector2d> lineSegment);
+
+    Eigen::MatrixXi buildWavefront(const Eigen::Vector2d& q_init, const Eigen::Vector2d& q_goal, const amp::GridCSpace2D& grid_cspace, bool wrap);
+
+    int clampWrap(int val, int lo, int hi);
 }

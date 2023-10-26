@@ -1,4 +1,4 @@
-#pragma once
+/*#pragma once
 #include "tools/ConfigurationSpace.h"
 #include "hw/HW4.h"
 
@@ -31,3 +31,4 @@ class MyCSpaceConstructor : public amp::GridCSpace2DConstructor {
 
         ~MyCSpaceConstructor() {}
 };
+*/

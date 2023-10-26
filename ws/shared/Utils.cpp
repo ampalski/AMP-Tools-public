@@ -1,4 +1,5 @@
 #include "Utils.h"
+#include <queue>
 
 // Return true if the possible step intersects an obstacle
 bool Utils::checkStep(Eigen::Vector2d start, Eigen::Vector2d stop, const amp::Environment2D& env) {
@@ -84,6 +85,108 @@ bool Utils::checkCollinearOverlap(double x1, double y1, double x2, double y2,
     return (x3 <= std::max(x1, x2) && x3 >= std::min(x1, x2) && 
         y3 <= std::max(y1, y2) && y3 >= std::min(y1, y2));
 
+}
+
+bool Utils::isPointInObstacles(Eigen::Vector2d point, const amp::Environment2D& env) {
+    // Loop through each obstacle in the environment, check it against the pointinpolygon fn
+    // Get all Obstacles
+    //PRINT_VEC2("Checking for Obstacles at ", point);
+    for(amp::Obstacle2D obst : env.obstacles){
+        if (isPointInPolygon(point, obst)) {
+            //DEBUG("Found obstacle");
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Utils::isPointInPolygon(Eigen::Vector2d point, const amp::Obstacle2D& obst) {
+    /* 
+    General idea is to take a line segment from the point to infinity and check
+    how many times that segment intersects the polygon. If an even number (or 0), 
+    return false, odd return true (in the polygon). 
+
+    Need to check for edge cases:
+    -If the intersection is a vertex, it should return 2 segments in collision.
+    Fine if outside, not fine if inside.
+    -If the point-infinity line is collinear with the segment, have to check 
+    if the point lies on the segment.
+    */
+    
+
+    // Build test segment
+    Eigen::Vector2d extreme = point + Eigen::Vector2d(999999.9, 0);
+    //PRINT_VEC2("From Point", point);
+    //PRINT_VEC2("To", extreme);
+
+    // Loop through each line segment
+    std::vector<Eigen::Vector2d> vertices = obst.verticesCCW();
+    Eigen::Vector2d obsStart, obsStop;
+    double denom, t;
+    int numIntersects = 0;
+    for(int i = 0; i < vertices.size(); i++){
+        int j = (i == vertices.size() - 1) ? 0 : i + 1;
+        obsStart = vertices[i];
+        obsStop = vertices[j];
+        //PRINT_VEC2("From Point", obsStart);
+        //PRINT_VEC2("To", obsStop);
+
+        //if parallel, check for colinear
+        //if yes, check if end points are within the other line segment
+
+        denom = (point(0) - extreme(0)) * (obsStart(1) - obsStop(1)) - 
+            (point(1) - extreme(1)) * (obsStart(0) - obsStop(0));
+
+        if (denom == 0) {
+            //Parallel, check for collinear and overlap
+            if (checkCollinearOverlap(obsStart(0), obsStart(1), obsStop(0), obsStop(1), point(0), point(1))) {
+                    //on the line segment, return true
+                    //DEBUG("On the line");
+                    return true;
+            }
+            //DEBUG("Colinear, no overlap");
+            continue;
+        }
+
+        // Basic line segment intersection check. If intersection occurs between
+        // 0 and 1 for both segments, there was an intersection
+
+        // if intersection occurs AT 0 or 1 on the polygon segment, handle vertex
+
+        t = (point(0) - obsStart(0)) * (obsStart(1) - obsStop(1)) - 
+            (point(1) - obsStart(1)) * (obsStart(0) - obsStop(0));
+        t /= denom;
+
+        if (t < 0.0 || t > 1) {
+            //DEBUG("intersection outside ray");
+            continue;
+        }
+
+        t = (point(0) - obsStart(0)) * (point(1) - extreme(1)) - 
+            (point(1) - obsStart(1)) * (point(0) - extreme(0));
+        t /= denom;
+
+        if (t < 0.0 || t > 1) {
+            //DEBUG("intersection outside segment");
+            continue;
+        }
+
+        if (t == 0 || t == 1) {
+            // only keep if the other vertex is below the point-extreme line
+            // will result in 0 or 2 if outside the polygon and hitting the vertex
+            // at a tangent, 1 if inside the polygon and exiting through the vertex
+            //DEBUG("Hit vertex");
+            double minY = std::min(obsStart(1), obsStop(1));
+            if (minY == point(1)) {
+                //DEBUG("A bad vertex");
+                continue;
+            }
+        }
+        //DEBUG("Incrementing");
+        numIntersects++;
+    }
+    //DEBUG("Total intersects " << numIntersects);
+    return numIntersects % 2 == 1 ? true : false;
 }
 
 Eigen::Vector2d Utils::rotateVec(Eigen::Vector2d vector, double angle) {
@@ -244,4 +347,157 @@ Eigen::Vector2d Utils::pointLineSegmentClosest(Eigen::Vector2d point, std::vecto
 
     Eigen::Vector2d closestPoint = lineSegment[0] + projLength * AB;
     return closestPoint;
+}
+
+
+Eigen::MatrixXi Utils::buildWavefront(const Eigen::Vector2d& q_init, const Eigen::Vector2d& q_goal, const amp::GridCSpace2D& grid_cspace, bool wrap) {
+    //DEBUG("Building wavefront");
+    
+    // Build grid for wavefront
+    // Do a first pass through grid_cspace to check for obstacles
+    // Then start at q_goal, and propagate outwards
+
+    // Initialize grid
+    auto[xCells, yCells] = grid_cspace.size();
+    double xRange = grid_cspace.x0Bounds().second - grid_cspace.x0Bounds().first;
+    double yRange = grid_cspace.x1Bounds().second - grid_cspace.x1Bounds().first;
+    double xStep = xRange / (xCells - 1);
+    double yStep = yRange / (yCells - 1);
+
+    Eigen::MatrixXi wavefront = Eigen::MatrixXi::Zero(xCells, yCells);
+
+    // Find grid point of q_goal
+    auto[xind,yind] = grid_cspace.getCellFromPoint(q_goal(0), q_goal(1));
+
+    //DEBUG("qGoal is at ("<<xind<<", "<<yind<<") = "
+        //<< problem.x_min+xind*xStep << ", " << problem.y_min+yind*yStep<<")");
+
+    // Initialize wavefront
+    // First grab obstacles
+    
+    for (int i = 0; i < xCells; i++) {
+        for (int j = 0; j < yCells; j++) {
+            if (grid_cspace(i,j)) {
+                //DEBUG("Setting point " << i << " " << j);
+                wavefront(i,j) = 1;
+            }
+        }
+    }
+
+    // Set goal = 2, initialize Neighbors queue
+    //DEBUG("Initializing queue");
+    wavefront(xind, yind) = 2;
+    std::queue<std::pair<int, int>> nextNeighbors;
+    if (wrap) {
+        nextNeighbors.emplace(Utils::clampWrap((int)xind+1,0,(int)xCells-1), yind);
+        nextNeighbors.emplace(Utils::clampWrap((int)xind-1,0,(int)xCells-1), yind);
+        nextNeighbors.emplace(xind, Utils::clampWrap((int)yind+1,0,(int)yCells-1));
+        nextNeighbors.emplace(xind, Utils::clampWrap((int)yind-1,0,(int)yCells-1));
+    } else{ 
+        nextNeighbors.emplace(std::clamp((int)xind+1,0,(int)xCells-1), yind);
+        nextNeighbors.emplace(std::clamp((int)xind-1,0,(int)xCells-1), yind);
+        nextNeighbors.emplace(xind, std::clamp((int)yind+1,0,(int)yCells-1));
+        nextNeighbors.emplace(xind, std::clamp((int)yind-1,0,(int)yCells-1));
+    }
+    
+
+    // Process until complete
+    int lowestNeighbor, val, ktr = 0;
+    std::vector<std::pair<int, int>> zeroNeighbors;
+    std::vector<std::pair<int, int>> prevNeighbors;
+    std::vector<std::pair<int, int>> tempNeighbors;
+    Eigen::Vector2d start = Eigen::Vector2d::Zero();
+    Eigen::Vector2d stop = Eigen::Vector2d::Zero();
+
+    while (nextNeighbors.size() > 0) {
+        std::pair<int,int> curInd = nextNeighbors.front();
+        //DEBUG("Checking point (" << curInd.first << ", " << curInd.second << ")");
+        if (wavefront(curInd.first, curInd.second) > 0) {
+            // Already handled or an obstacle
+            nextNeighbors.pop();
+            continue;
+        }
+        //DEBUG("Current ind is ("<<curInd.first<<", "<<curInd.second<<") = ("
+            //<< problem.x_min+curInd.first*xStep << ", " << problem.y_min+curInd.second*yStep<<")");
+
+        ktr++;
+        if (ktr%100 == 0) {
+            //DEBUG(ktr);
+        }
+        // Check each neighbor to see if it's been visited before or not
+        tempNeighbors.clear();
+        zeroNeighbors.clear();
+        prevNeighbors.clear();
+        if (wrap) {
+            tempNeighbors.emplace_back(Utils::clampWrap(curInd.first+1,0,(int)xCells-1), curInd.second);
+            tempNeighbors.emplace_back(Utils::clampWrap(curInd.first-1,0,(int)xCells-1), curInd.second);
+            tempNeighbors.emplace_back(curInd.first, Utils::clampWrap(curInd.second+1,0,(int)yCells-1));
+            tempNeighbors.emplace_back(curInd.first, Utils::clampWrap(curInd.second-1,0,(int)yCells-1));
+        } else {
+            tempNeighbors.emplace_back(std::clamp(curInd.first+1,0,(int)xCells-1), curInd.second);
+            tempNeighbors.emplace_back(std::clamp(curInd.first-1,0,(int)xCells-1), curInd.second);
+            tempNeighbors.emplace_back(curInd.first, std::clamp(curInd.second+1,0,(int)yCells-1));
+            tempNeighbors.emplace_back(curInd.first, std::clamp(curInd.second-1,0,(int)yCells-1));
+        }
+
+        for (std::pair<int,int> check : tempNeighbors) {
+            if (check.first < 0 || check.first >= xCells) continue;
+            if (check.second < 0 || check.second >= yCells) continue;
+            
+            val = wavefront(check.first,check.second);
+            //DEBUG("Checking ("<<check.first<<", "<<check.second<<") = " << val);
+            if (val == 0) {
+                //DEBUG("Assigned to zeroNeighbors");
+                zeroNeighbors.push_back(check);
+                continue;
+            } else if (val == 1) {
+                //DEBUG("Obstacle");
+                continue; // obstacle
+            } else if (val == -1) {
+                //DEBUG("Already in the queue");
+                continue;
+            }
+            //DEBUG("Assigned to prevNeighbors");
+            prevNeighbors.push_back(check);
+        }
+        
+        // Set new value
+        lowestNeighbor = INT32_MAX;
+        if (prevNeighbors.size() == 0) {
+            //DEBUG("Accessed empty neighborhood by accident at " << ktr);
+        }
+        for (std::pair<int,int> check : prevNeighbors) {
+            val = wavefront(check.first,check.second);
+            
+            if (val < lowestNeighbor) {
+                lowestNeighbor = val;
+            }
+        }
+        //DEBUG("Assigning ("<<curInd.first<<", "<<curInd.second<<") = " << lowestNeighbor+1);
+        wavefront(curInd.first, curInd.second) = lowestNeighbor + 1;
+
+        // Expand the wavefront
+        for (std::pair<int,int> check : zeroNeighbors) {
+            //DEBUG("Adding ("<<check.first<<", "<<check.second<<")");
+            // Should have already accounted for obstacle checking
+            wavefront(check.first, check.second) = -1; // already accounted for
+            nextNeighbors.push(check);
+        }
+
+        nextNeighbors.pop();
+    }
+
+    return wavefront;
+}
+
+int Utils::clampWrap(int val, int lo, int hi) {
+    if (val >= lo && val <= hi) {
+        return val;
+    } else if (val < lo) {
+        int diff = lo - val - 1;
+        return hi - diff;
+    } else {
+        int diff = val - hi - 1;
+        return lo + diff;
+    }
 }

@@ -1,4 +1,4 @@
-#include "MyLinkManipulator.h"
+/*#include "MyLinkManipulator.h"
 #include "Utils.h"
 
 MyLinkManipulator2D::MyLinkManipulator2D() {
@@ -108,4 +108,4 @@ amp::ManipulatorState MyLinkManipulator2D::getConfigurationFromIK(const Eigen::V
     config.push_back(theta3);
 
     return config;
-}
+}*/
