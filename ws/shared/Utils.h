@@ -4,6 +4,7 @@
 #include "AMPCore.h"
 #include "hw/HW2.h"
 #include "tools/Environment.h"
+#include "tools/Random.h"
 #include <math.h>
 
 namespace Utils {
@@ -36,4 +37,6 @@ namespace Utils {
     Eigen::MatrixXi buildWavefront(const Eigen::Vector2d& q_init, const Eigen::Vector2d& q_goal, const amp::GridCSpace2D& grid_cspace, bool wrap);
 
     int clampWrap(int val, int lo, int hi);
+
+    Eigen::Vector2d generateCollisionFreeSample(const amp::Problem2D& problem);
 }

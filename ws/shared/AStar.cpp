@@ -76,6 +76,7 @@ MyAStar::GraphSearchResult MyAStar::search(const amp::ShortestPathProblem& probl
     allNodes[problem.init_node].open = true;
 
     int ktr = 0;
+    bool goalFound = false;
     //DEBUG("# of nodes: " << problem.graph->nodes().size());
     while (!open.empty()) {
         ktr++;
@@ -85,17 +86,18 @@ MyAStar::GraphSearchResult MyAStar::search(const amp::ShortestPathProblem& probl
             //DEBUG(i <<": " << allNodes[i].priority);
         //}
         amp::Node nBest = findBest(allNodes, open);
-        //DEBUG("nBest = " << nBest.node);
+        //DEBUG("nBest = " << nBest);
         // Remove nbest from O and add to C.
         open.erase(nBest);
         allNodes[nBest].open = false;
 
         if (!allNodes[nBest].closed) {
-            //DEBUG("Inserting " << nBest.node << " to closed");
+            //DEBUG("Inserting " << nBest << " to closed");
             allNodes[nBest].closed = true;
         }
         // If nbest = qgoal , EXIT.
         if (nBest == problem.goal_node){
+            goalFound = true;
             break;
         }
         // Expand nbest : for all x ∈ Star(nbest) that are not in C.
@@ -136,18 +138,18 @@ MyAStar::GraphSearchResult MyAStar::search(const amp::ShortestPathProblem& probl
         //DEBUG(i.node <<": " << i.prevNode);
     //}
     MyAStar::GraphSearchResult result;
-    if (allNodes[problem.goal_node].closed = true) {
+    if (goalFound) {
         result.success = true;
         result.path_cost = allNodes[problem.goal_node].pathLength;
         result.node_path.insert(result.node_path.begin(), problem.goal_node);
-        //DEBUG("Inserted " << problem.goal_node<< ", next " << temp.prevNode);
+        //DEBUG("Inserted " << problem.goal_node);
         ktr = 0;
         amp::Node temp = problem.goal_node;
         while (temp != problem.init_node) {
             ktr++;
             temp = allNodes[temp].prevNode;
             result.node_path.insert(result.node_path.begin(), temp);
-            //DEBUG("inserted " << temp.node);
+            //DEBUG("inserted " << temp);
             if (ktr > 10000) {
                 break;
             }

@@ -501,3 +501,38 @@ int Utils::clampWrap(int val, int lo, int hi) {
         return lo + diff;
     }
 }
+
+Eigen::Vector2d Utils::generateCollisionFreeSample(const amp::Problem2D& problem) {
+    /*
+    1) Generate qa at random
+    2) if collision free, return qa
+    3) else, generate qb
+    4) step along path from qa to qb
+    5) return first valid point
+    6) if qb is reached without valid point, return null
+    */
+
+    Eigen::Vector2d qa;
+    qa(0) = amp::RNG::randd(problem.x_min, problem.x_max);
+    qa(1) = amp::RNG::randd(problem.y_min, problem.y_max);
+
+    if (!isPointInObstacles(qa, problem)) {
+        return qa;
+    }
+
+    Eigen::Vector2d qb;
+    qb(0) = amp::RNG::randd(problem.x_min, problem.x_max);
+    qb(1) = amp::RNG::randd(problem.y_min, problem.y_max);
+
+    Eigen::Vector2d diff = qb - qa;
+    double step = 0.1;
+    Eigen::Vector2d qnew;
+    while (step < 1) {
+        qnew = qa + step * diff;
+        if (!isPointInObstacles(qnew, problem)) {
+            return qnew;
+        }
+        step += .1;
+    }
+    return Eigen::Vector2d(problem.x_max+1, problem.y_max+1);
+}
