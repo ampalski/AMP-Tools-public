@@ -536,3 +536,179 @@ Eigen::Vector2d Utils::generateCollisionFreeSample(const amp::Problem2D& problem
     }
     return Eigen::Vector2d(problem.x_max+1, problem.y_max+1);
 }
+
+Eigen::VectorXd Utils::generateCollisionFreeSample(const amp::MultiAgentProblem2D& problem, int m) {
+    /*
+    1) Generate qa at random
+    2) if collision free, return qa
+    3) else, generate qb
+    4) step along path from qa to qb
+    5) return first valid point
+    6) if qb is reached without valid point, return null
+    */
+    Eigen::VectorXd qa(2*m);
+    int ind0, ind1;
+    for (int i = 0; i < m; i++) {
+        ind0 = 2*i;
+        ind1 = 2*i + 1;
+        qa(ind0) = amp::RNG::randd(problem.x_min, problem.x_max);
+        qa(ind1) = amp::RNG::randd(problem.y_min, problem.y_max);
+    }
+    
+
+    if (!isMultiAgentCollisionInstant(problem, qa, m)) {
+        return qa;
+    }
+
+    Eigen::VectorXd qb(2*m);
+    for (int i = 0; i < m; i++) {
+        ind0 = 2*i;
+        ind1 = 2*i + 1;
+        qb(ind0) = amp::RNG::randd(problem.x_min, problem.x_max);
+        qb(ind1) = amp::RNG::randd(problem.y_min, problem.y_max);
+    }
+
+    Eigen::VectorXd diff = qb - qa;
+    double step = 0.1;
+    Eigen::VectorXd qnew;
+    while (step < 1) {
+        qnew = qa + step * diff;
+        if (!isMultiAgentCollisionInstant(problem, qnew, m)) {
+            return qnew;
+        }
+        step += .1;
+    }
+    //DEBUG("Invalid random point");
+    return Eigen::VectorXd(m);
+}
+
+bool Utils::isMultiAgentCollisionInstant(const amp::MultiAgentProblem2D& problem, const Eigen::VectorXd state, int m) {
+    // Return true if in collision
+    
+    /*
+    1) First treat the agents as points and check if they are inside any polygons
+    2) If yes, short circuit as true
+    3) Next, get the distance from each agent to each polygon and check against
+    the radius of the disk
+    4) Finally, get the distance of each agent to each other, check against the 
+    sum of the radii of each disk.
+    */
+    
+    // Check for point agent
+    int ind0, ind1;
+    Eigen::Vector2d point1, point2;
+    
+    for (int i = 0; i < m; i++) {
+        ind0 = 2*i;
+        ind1 = 2*i + 1;
+        point1(0) = state(ind0);
+        point1(1) = state(ind1);
+        if (isPointInObstacles(point1, problem)) {
+            return true;
+        }
+    }
+
+    // Check for disk agent against static obstacles
+    std::vector<Eigen::Vector2d> vertices, segment;
+    int k;
+    double dist, dist2;
+
+    for (amp::Obstacle2D obst : problem.obstacles) {
+        vertices.clear();
+        vertices = obst.verticesCCW();
+        for (int j = 0; j < vertices.size(); j++) {
+            segment.clear();
+            segment.push_back(vertices[j]);
+            k = (j == vertices.size() - 1) ? 0: j + 1;
+            segment.push_back(vertices[k]);
+
+            for (int i = 0; i < m; i++) {
+                ind0 = 2*i;
+                ind1 = 2*i + 1;
+                point1(0) = state(ind0);
+                point1(1) = state(ind1);
+                point2 = pointLineSegmentClosest(point1, segment); 
+                dist = (point2-point1).norm();
+                if (dist < problem.agent_properties.at(i).radius) {
+                    return true;
+                }
+            }                
+        }
+    }
+
+    // Check against other agents
+    for (int i = 0; i < (m-1); i++) {
+        ind0 = 2*i;
+        ind1 = 2*i + 1;
+        point1(0) = state(ind0);
+        point1(1) = state(ind1);
+        for (int j = i+1; j < m; j++) {
+            ind0 = 2*j;
+            ind1 = 2*j + 1;
+            point2(0) = state(ind0);
+            point2(1) = state(ind1);
+            dist = (point2-point1).norm();
+            dist2 = problem.agent_properties.at(i).radius + problem.agent_properties.at(j).radius;
+            if (dist < dist2) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+bool Utils::isMultiAgentCollisionStep(const amp::MultiAgentProblem2D& problem, const Eigen::VectorXd state0, const Eigen::VectorXd state1, int m) {
+    Eigen::VectorXd check;
+    Eigen::VectorXd dir = state1 - state0;
+    double step = .1;
+    double curStep = 0;
+
+    while (curStep <= 1) {
+        check = state0 + curStep * dir;
+        if (isMultiAgentCollisionInstant(problem, check, m)) {
+            //DEBUG("Col Found at: " << check(0) << " "<< check(1) << " "<< check(2) << " "<< check(3) << " ");
+            return true;
+        }
+        curStep += step;
+    }
+    return false;
+}
+
+Eigen::Vector2d Utils::genColFreeSample(const amp::MultiAgentProblem2D& problem) {
+    /*
+    1) Generate qa at random
+    2) if collision free, return qa
+    3) else, generate qb
+    4) step along path from qa to qb
+    5) return first valid point
+    6) if qb is reached without valid point, return null
+    */
+    Eigen::Vector2d qa;
+
+    qa(0) = amp::RNG::randd(problem.x_min, problem.x_max);
+    qa(1) = amp::RNG::randd(problem.y_min, problem.y_max);
+    Eigen::VectorXd temp(2);
+    temp << qa;
+    if (!isMultiAgentCollisionInstant(problem, temp, 1)) {
+        return qa;
+    }
+
+    Eigen::Vector2d qb;
+    qb(0) = amp::RNG::randd(problem.x_min, problem.x_max);
+    qb(1) = amp::RNG::randd(problem.y_min, problem.y_max);
+
+    Eigen::Vector2d diff = qb - qa;
+    double step = 0.1;
+    Eigen::Vector2d qnew;
+    while (step < 1) {
+        qnew = qa + step * diff;
+        temp(0) = qnew(0);
+        temp(1) = qnew(1);
+        if (!isMultiAgentCollisionInstant(problem, temp, 1)) {
+            return qnew;
+        }
+        step += .1;
+    }
+    return Eigen::Vector2d(problem.x_max+1, problem.y_max+1);
+}

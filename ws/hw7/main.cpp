@@ -4,11 +4,11 @@
 #include "hw/HW2.h"
 #include "hw/HW5.h"
 #include "hw/HW7.h"
-#include "PRM.h"
-#include "RRT.h"
+//#include "PRM.h"
+//#include "RRT.h"
 
 using namespace amp;
-
+/*
 void profilePRM(MyPRM algo, const amp::Problem2D& problem, std::vector<double>& success, 
   std::vector<double>& pathLength, std::vector<double>& runTime) {
     success.clear();
@@ -71,7 +71,7 @@ void profileRRT(MyRRT algo, const amp::Problem2D& problem, std::vector<double>& 
     DEBUG("Successful runs: " << ktr);
     time.stop();
 }
-
+*/
 int main(int argc, char** argv) {
     amp::RNG::seed(amp::RNG::randiUnbounded());
 
@@ -252,10 +252,10 @@ int main(int argc, char** argv) {
     //Visualizer::showFigures();
 
     // Grade
-    MyPRM algoPRM(500, 2.0, true);
-    MyRRT algoRRT(5000, 0.05, 0.5, 0.25);
+    //MyPRM algoPRM(500, 2.0, true);
+    //MyRRT algoRRT(5000, 0.05, 0.5, 0.25);
 
-    amp::HW7::grade(algoPRM, algoRRT, "anpa7940@colorado.edu", argc, argv);
+    //amp::HW7::grade(algoPRM, algoRRT, "anpa7940@colorado.edu", argc, argv);
 
     return 0;
 

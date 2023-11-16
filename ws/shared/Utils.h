@@ -39,4 +39,12 @@ namespace Utils {
     int clampWrap(int val, int lo, int hi);
 
     Eigen::Vector2d generateCollisionFreeSample(const amp::Problem2D& problem);
+
+    Eigen::VectorXd generateCollisionFreeSample(const amp::MultiAgentProblem2D& problem, int m);
+
+    Eigen::Vector2d genColFreeSample(const amp::MultiAgentProblem2D& problem);
+
+    bool isMultiAgentCollisionInstant(const amp::MultiAgentProblem2D& problem, const Eigen::VectorXd state, int m);
+
+    bool isMultiAgentCollisionStep(const amp::MultiAgentProblem2D& problem, const Eigen::VectorXd state0, const Eigen::VectorXd state1, int m);
 }
